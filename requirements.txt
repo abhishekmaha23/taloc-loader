@@ -1,0 +1,13 @@
+PyYAML==5.4.1
+# Note that pandas itself is part of our docker image.
+# openpyxl is required if we load xlsx files.
+openpyxl==3.0.6
+
+# only for plotting
+# matplotlib==3.3.3
+
+# compare name similarity using ngrams
+string_grouper==0.1.1
+
+# Only if adjusting excel column widths
+xlsxwriter==1.3.7

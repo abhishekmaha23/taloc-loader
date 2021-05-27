@@ -1,0 +1,67 @@
+# This config file defines the inputs and outputs of the software.
+# In addition, it has some school specific configurations
+# Longer term and when other schools may use it, it could contain more school specific configs.
+#
+# There are 2 alternatives how to indicate input storage location in this file:
+# either specifying individual files, or specifying directories containing files.
+#
+# Where files have been chosen, there are two reasons:
+# 1. Inputs are excel files and we need to specify the sheet name.
+# 2. The software runs on customer side. If a customer opens one of the files, we need to
+#    avoid a temporary autosave file interfering with the program.
+General:
+  # base folder for all inputs
+  originals_folder: data-originals
+  # base folder for all outputs
+  output_folder: output
+  # Database of airport information
+  airports_extended: airports-extended.csv
+# atmosfair: data provider for emissions (email/csv interface)
+atmosfair:
+  # location for responses with emission data.
+  # Just put responses (which should be timestamped) in there
+  responses_folder: 'atmosfair_responses'
+# air travel inputs: list of individual flight segments
+# spesen and airplus are 2 files with the same data format.
+# TODO: Generalize these into a single list
+# bta (which is a travel agency) file has a very different format and needs separate handling.
+legs:
+  spesen:
+    - '[2017-2020_Flights from Archives_02.xlsx]Tabelle1'
+  airplus:
+    - '[2017-2020_Flights from Airplus_02.xlsx]Tabelle1'
+  bta:
+    - '[Airline Miles 2009 - 2020 incl Routes_cleaned_03.xlsx]2017-2020_Flights from BTA'
+HR:
+  # excerpts are yearly status files with one line per employee.
+  # We use these to match up flights with people.
+  excerpts:
+    # These are lists because we expect completions of missing data for any year in separate files.
+    2017:
+      - '[20171231 Personalliste.XLSX]Sheet1'
+      # - '[20210302 HR missing data consolidated.xlsx]2017MA'
+      # - '[20210302 HR missing data consolidated.xlsx]2017EE'
+    2018:
+      - '[20181231 Personalliste.XLSX]Sheet1'
+      # - '[20210302 HR missing data consolidated.xlsx]2018MA'
+      # - '[20210302 HR missing data consolidated.xlsx]2018EE'
+    # Note: the change in column definitions starting 2019.
+    2019:
+      - '[20191231 Personalliste.XLSX]Sheet1'
+      # - '[20210302 HR missing data consolidated.xlsx]2019-2020MA'
+      # - '[20210302 HR missing data consolidated.xlsx]2019EE'
+    2020:
+      - '[20201231 Personalliste.XLSX]Sheet1'
+      # - '[20210302 HR missing data consolidated.xlsx]2019-2020MA'
+      # - '[20210302 HR missing data consolidated.xlsx]2020EE'
+    # It's possible to add more records here, but the program expects the same
+    # xls column format as the 2020 excerpt.
+  # For QC: Only these top level department letters may exist
+  top_departments: [A, G, L, N, P, R, S, T, V, W]
+  # bta flight data has ONLY pax names, no employee ids. The program matches employee ids by name.
+  # A file is pushed to customer to confirm non-trivial matches.
+  # This is the place the customer puts their filled file.
+  matches_folder: hr_bta_matches
+  outputs:
+    # The filename of the pax matching confirmation file
+    proposed_matches_basename: hr_bta_matches

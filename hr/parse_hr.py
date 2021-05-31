@@ -136,13 +136,15 @@ invalid_departments = excerpts_by_year[~excerpts_by_year['org code'].str.casefol
 
 # Adjust shape for logging
 hr_issues = pd.DataFrame.copy(invalid_departments)
-hr_issues.loc[hr_issues['org code'] == '',
-              'comment'] = 'HR excerpt missing org code'
-hr_issues.loc[hr_issues['org code'] != '', 'comment'] = hr_issues.apply(
-    lambda row: f'HR excerpt invalid org code {row["org code"]}', axis=1)
 
-hr_issues = hr_issues.loc[:, ['year', 'employee_id8', 'comment', 'full name']]
-hr_issues.rename(columns={'full name': 'HR name'}, inplace=True)
+if len(hr_issues):
+    hr_issues.loc[hr_issues['org code'] == '',
+                'comment'] = 'HR excerpt missing org code'
+    hr_issues.loc[hr_issues['org code'] != '', 'comment'] = hr_issues.apply(
+        lambda row: f'HR excerpt invalid org code {row["org code"]}', axis=1)
+
+    hr_issues = hr_issues.loc[:, ['year', 'employee_id8', 'comment', 'full name']]
+    hr_issues.rename(columns={'full name': 'HR name'}, inplace=True)
 
 # Customer request for 'top level department' which has the first org code letter.
 excerpts_by_year['top level department'] = excerpts_by_year['org code'].str.get(0)

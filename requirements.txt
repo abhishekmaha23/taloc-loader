@@ -11,3 +11,6 @@ string_grouper==0.1.1
 
 # Only if adjusting excel column widths
 xlsxwriter==1.3.7
+
+# For repeating experiments
+flask==2.0.1

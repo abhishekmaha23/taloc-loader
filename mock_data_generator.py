@@ -7,6 +7,10 @@ import datetime
 import copy
 import math
 import uuid
+import shutil
+import os
+from openpyxl import load_workbook
+
 
 fake = Faker()
 
@@ -65,8 +69,8 @@ class Employee(Person):
         else:
             self.vertrags_bg = random.choice(['40.00', '60.00'])
         self.lohn_bg = self.vertrags_bg
-        self.entry_date = faker_instance.date_between(end_date='-4y').strftime("%d-%m-%Y")
-        self.end_date = '31-12-9999'
+        self.entry_date = faker_instance.date_between(end_date='-4y').strftime('%d-%m-%Y') + ' 00:00:00'
+        self.end_date = '9999-12-31 00:00:00' 
         self._make_dataframes()
 
 
@@ -221,7 +225,7 @@ class Flight_Spesen_Airplus_Data(Flight):
         record_date = self.to_flight_dates[0] + datetime.timedelta(weeks=random.randint(-16,16))
         self.record_year = record_date.year
         self.record_month = record_date.month
-        self.flight_date_unknown = 'FALSE'
+        self.flight_date_unknown = 'False'
         self.record_comments = ''
 
         self._make_dataframe()
@@ -269,6 +273,22 @@ flights_bta_columns = ['Profit Center', 'Dossier No', 'Invoice Receiver', 'Name'
     'Routing 2', 'Routing 3', 'Routing 4', 'Routing 5', 'Routing 6', 'Routing 7', 'Routing 8', 'Routing 9', 'Routing 10',
     'Routing 11', 'Routing 12']
 
+# Taken departments from bta_legs_import.py
+possible_bta_deps = {
+    'Life Sciences & Facility Managment': 'N',
+    'Departement Angewandte Linguistik': 'L',
+    'Departement Gesundheit': 'G',
+    'School of Management and Law': 'W',
+    'Rektorat': 'R',
+    'Departement Soziale Arbeit': 'S',
+    'School of Engineering': 'T',
+    'Departement Angewandte Psychologie': 'P',
+    'Finanzen & Services': 'V'
+}
+# Taken possible fare classes from bta_legs_import.py
+possible_bta_fare_classes = ['F', 'Y', 'C', 'W']
+
+
 class Flight_BTA_Data(Flight):
     def __init__(self, faker_instance, passenger) -> None:
         super().__init__(faker_instance)
@@ -276,7 +296,7 @@ class Flight_BTA_Data(Flight):
         self.dossier_number = str(next(dossier_number_generator))
         self.invoice_number = str(random.randint(1000000, 9999999))
         self.name = 'A Uni'
-        self.department = random.choice(possible_organizations)[1]
+        self.department = random.choice(list(possible_bta_deps.keys()))
 
         # Person chosen for the flight has to have weirdness randomly added.
         self.associated_passenger = passenger
@@ -288,10 +308,10 @@ class Flight_BTA_Data(Flight):
         self.ticket_no = str(random.randint(10000, 99999))
         self.ticket_no_2 = str(random.randint(10000, 99999))
 
-        self.travel_class = random.choice(['Y', 'B', 'C'])
+        self.travel_class = random.choice(['F', 'Y', 'C', 'W'])
         self.metric_tons_list =  [] # str(random.uniform(0, 2))
         for _ in self.to_segment_endpoints:
-            self.metric_tons_list.append(str(random.uniform(0, 2)))
+            self.metric_tons_list.append(str(round(random.uniform(0, 2), 2)))
         self.metric_tons_list = self.metric_tons_list + list(reversed(self.metric_tons_list))
         
         self.price_list = [] # str(random.randint(1, 100)) + '.00'
@@ -318,9 +338,10 @@ class Flight_BTA_Data(Flight):
         self.routing_columns = ['' for i in range(12)]
         for i in range(len(self.all_segment_endpoint_tuples)):
             flight_details_tuple = get_random_flight_number(type='bta')
+            # Format - ['from' | 'to'| 'airline'| 'nr'| 'class orig'| 'class'| 'leg_date']
             routing_string = self.all_segment_endpoint_tuples[i][0] + ' |' + self.all_segment_endpoint_tuples[i][1] \
                     + ' |' + flight_details_tuple[0] + ' | ' + flight_details_tuple[1] + '|' + flight_details_tuple[2] + '|'  \
-                    + flight_details_tuple[3] + '|' + self.all_flight_dates[i].strftime('%d.%m.%Y')
+                    + self.travel_class + '|' + self.all_flight_dates[i].strftime('%d.%m.%Y')
             self.routing_columns[i] = routing_string
             self.all_flight_numbers.append(flight_details_tuple[4])
         
@@ -422,29 +443,81 @@ class AtmosfairFlightData:
 # There's 1 Atmosfair CSV to write, entirely anew.
 # Initial run should generate data into the hr_bta_matches file, which can then be updated manually and run afterwards nicely.  
 
-def generate_mock_data():
+def write_excel_file(df, file_path):
+    book = load_workbook(file_path)
+    writer = pd.ExcelWriter(file_path, engine='openpyxl')
+    writer.book = book
+    
+    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
+    df.to_excel(writer, index= False)
+    writer.save()
 
-    num_people_overall = 50
+def write_csv_file(df, file_path):
+    df.to_csv(file_path, index=False)
 
-    num_non_flying_employees = 30
-    num_flying_employees = 14
-    num_flying_guests = 3
-    num_flying_employees_not_in_hr = 3
+def create_and_write_to_file(config, hr_data, flight_data, atmos_data):
+    base_file_folder = 'test-base-files'
+    target_file_folder = 'data-tests'
+
+    # Clean all previous generated files in data-tests folder except the templates 
+    # for file in os.listdir(target_file_folder):
+    
+        # if os.path.isfile(file_path):
+        #     os.remove(file_path)
+        # elif os.path.isdir(os.path.join(target_file_folder, file)):
+        #     pass
+    if os.path.exists(target_file_folder) and os.path.isdir(target_file_folder):
+        shutil.rmtree(target_file_folder)
+    os.mkdir(target_file_folder)
+
+    print('Cleared data-tests directory!')
+    # Copy all files in template folder to the outside first
+    shutil.copytree(base_file_folder, target_file_folder, dirs_exist_ok=True)
+    write_excel_file(flight_data[0], os.path.join(target_file_folder, config['spesen_legs_filename']))
+    write_excel_file(flight_data[1], os.path.join(target_file_folder, config['airplus_legs_filename']))
+    write_excel_file(flight_data[2], os.path.join(target_file_folder, config['bta_legs_filename']))
+    write_excel_file(hr_data[0], os.path.join(target_file_folder, config['hr_before_2019_filename']))
+    write_excel_file(hr_data[1], os.path.join(target_file_folder, config['hr_since_2019_filename']))
+    write_csv_file(atmos_data, os.path.join(target_file_folder, 'atmosfair_responses', config['atmosfair_filename']))
+
+    print('Written data to file!')
+
+def generate_mock_data(config=None):
+    print('-----------------')
+    print('Starting Mock Data Generation utility')
+    print('------------------')
+
+    if config is None:
+        config = get_default_mock_config()
+        print('Using default mock config')
 
     list_non_flying_employees = []
     list_flying_employees = []
     list_flying_guests = []
     list_flying_employees_not_in_hr = []
 
-    # Actually generating people
-    for i in range(num_non_flying_employees):
+    for i in range(config['num_non_flying_employees']):
         list_non_flying_employees.append(Employee(fake))
-    for i in range(num_flying_employees):
-        list_flying_employees.append(Employee(fake))
-    for i in range(num_flying_guests):
-        list_flying_guests.append(Person(fake))
-    for i in range(num_flying_employees_not_in_hr):
-        list_flying_employees_not_in_hr.append(Person(fake))
+    
+    # Generating people and employees
+    if config['people_distribution'] == 'manual':
+        # All values of splits are manually mentioned in this case
+        for i in range(config['num_flying_employees']):
+            list_flying_employees.append(Employee(fake))
+        for i in range(config['num_flying_guests']):
+            list_flying_guests.append(Person(fake))
+        for i in range(config['num_flying_employees_not_in_hr']):
+            list_flying_employees_not_in_hr.append(Person(fake))
+    else:
+        for _ in range(config['num_all_flying_people']):
+            flying_person_type = random.choice(['employee', 'guest', 'unregistered_employee'])
+            if flying_person_type == 'employee':
+                list_flying_employees.append(Employee(fake))
+            elif flying_person_type == 'guest':
+                list_flying_guests.append(Person(fake))
+            elif flying_person_type == 'unregistered_employee':
+                list_flying_employees_not_in_hr.append(Person(fake))
+        
     list_all_flying_people = list_flying_employees + list_flying_guests + list_flying_employees_not_in_hr
     print('Created', len(list_all_flying_people) + len(list_non_flying_employees), 'people!')
     print(len(list_all_flying_people), 'people have taken flights in the past period.')
@@ -458,22 +531,43 @@ def generate_mock_data():
     spesen_flights = []
     airplus_flights = []
     bta_flights = []
-    for passenger in actual_passenger_list:
-        flight_type = random.choice(['bta', 'spesen', 'airplus'])
-        # flight_type = random.choice(['spesen', 'airplus'])
-        # flight_type = random.choice(['bta'])
-        if flight_type == 'bta':
-            new_flight = Flight_BTA_Data(fake, passenger)
-            bta_flights.append(new_flight)
-            all_flights.append(new_flight)
-        elif flight_type == 'spesen':
-            new_flight = Flight_Spesen_Airplus_Data(fake, passenger, 'spesen')
+    
+    if config['flight_distribution'] == 'manual':
+        # Passenger list is already shuffled. Requirement is set that more passengers are generated than flights needed.
+        # With this constraint, we start with index 0 sequentially and assign the passengers to the required flight data.
+        current_passenger_index = 0
+        for _ in range(config['num_flights_in_spesen']):
+            new_flight = Flight_Spesen_Airplus_Data(fake, actual_passenger_list[current_passenger_index], 'spesen')
             spesen_flights.append(new_flight)
             all_flights.append(new_flight)
-        elif flight_type == 'airplus':
-            new_flight = Flight_Spesen_Airplus_Data(fake, passenger, 'airplus')
+            current_passenger_index += 1
+        for _ in range(config['num_flights_in_airplus']):
+            new_flight = Flight_Spesen_Airplus_Data(fake, actual_passenger_list[current_passenger_index], 'airplus')
             airplus_flights.append(new_flight)
             all_flights.append(new_flight)
+            current_passenger_index += 1
+        for _ in range(config['num_flights_in_bta']):
+            new_flight = Flight_BTA_Data(fake, actual_passenger_list[current_passenger_index])
+            bta_flights.append(new_flight)
+            all_flights.append(new_flight)
+            current_passenger_index += 1
+    else:
+        for passenger in actual_passenger_list:
+            flight_type = random.choice(['bta', 'spesen', 'airplus'])
+            # flight_type = random.choice(['spesen', 'airplus'])
+            # flight_type = random.choice(['bta'])
+            if flight_type == 'bta':
+                new_flight = Flight_BTA_Data(fake, passenger)
+                bta_flights.append(new_flight)
+                all_flights.append(new_flight)
+            elif flight_type == 'spesen':
+                new_flight = Flight_Spesen_Airplus_Data(fake, passenger, 'spesen')
+                spesen_flights.append(new_flight)
+                all_flights.append(new_flight)
+            elif flight_type == 'airplus':
+                new_flight = Flight_Spesen_Airplus_Data(fake, passenger, 'airplus')
+                airplus_flights.append(new_flight)
+                all_flights.append(new_flight)
 
     print('----------')
     print('Created', len(all_flights), 'round trips!')
@@ -492,29 +586,60 @@ def generate_mock_data():
     for flight in flights_with_atmosfair_data:
         existing_atmosfair_data.append(AtmosfairFlightData(flight, fake))
     print('----------')
-    print('Created atmosfair data for ', len(existing_atmosfair_data), ' trips.')
+    print('Created atmosfair data for', len(existing_atmosfair_data), 'trips.')
     print('----------')
 
     # Begin writing all data to files.
+    # HR Data
     hr_dataframe_before_2019 = pd.concat(person.get_dataframe('before-2019') for person in list_flying_employees).reset_index(drop=True)
     hr_dataframe_since_2019 = pd.concat(person.get_dataframe('since-2019') for person in list_flying_employees).reset_index(drop=True)
-    # print(hr_dataframe_before_2019)
-    # print(hr_dataframe_since_2019)
+    
+    # Flight Data
     if len(spesen_flights) > 0:
         spesen_flight_dataframe = pd.concat(flight.get_dataframe() for flight in spesen_flights).reset_index(drop=True)
     if len(airplus_flights) > 0:
         airplus_flight_dataframe = pd.concat(flight.get_dataframe() for flight in airplus_flights).reset_index(drop=True)
-    if len(bta_flights)>0:
+    if len(bta_flights) > 0:
         bta_flight_dataframe = pd.concat(flight.get_dataframe() for flight in bta_flights).reset_index(drop=True)
-    # print(spesen_flight_dataframe)
-    # print(airplus_flight_dataframe)
-    # print(bta_flight_dataframe)
-    # bta_flight_dataframe.to_csv('bta-test.csv', index=False)
-
+    
+    # Atmosfair Data
     if len(existing_atmosfair_data) > 0:
         atmosfair_flight_dataframe = pd.concat(atmosfair_data.get_dataframe() for atmosfair_data in existing_atmosfair_data).reset_index(drop=True)
     # print(atmosfair_flight_dataframe)
 
-    # atmosfair_flight_dataframe.to_csv('atmos.csv', index=False)
+    hr_data = (hr_dataframe_before_2019, hr_dataframe_since_2019)
+    flight_data = (spesen_flight_dataframe, airplus_flight_dataframe, bta_flight_dataframe)
+    
+    create_and_write_to_file(config, hr_data, flight_data, atmosfair_flight_dataframe)
+
+
+def get_default_mock_config():
+    default_mock_config = {}
+    default_mock_config['num_people_overall'] = 50
+    default_mock_config['num_non_flying_employees'] = 30  # First value considered
+    default_mock_config['proportion_of_flying_population'] = 0.6 # This is considered if the above number is not mentioned.
+
+    default_mock_config['num_all_flying_people'] = default_mock_config['num_people_overall'] - \
+            default_mock_config['num_non_flying_employees'] ## In default, it's 20
+
+    default_mock_config['people_distribution'] = 'manual' ## other option is 'random', randomly choosing what kind the flying people are.
+    default_mock_config['num_flying_employees'] = 14
+    default_mock_config['num_flying_guests'] = 3
+    default_mock_config['num_flying_employees_not_in_hr'] = 3
+
+
+    default_mock_config['flight_distribution'] = 'manual' ## other option is 'random'
+    default_mock_config['num_flights_in_spesen'] = 10
+    default_mock_config['num_flights_in_airplus'] = 4
+    default_mock_config['num_flights_in_bta'] = 6 # Sum should be less than or equal to the number of flying people 
+
+    default_mock_config['hr_before_2019_filename'] = 'hr-before-2019-base.xlsx'
+    default_mock_config['hr_since_2019_filename'] = 'hr-since-2019-base.xlsx'
+    default_mock_config['spesen_legs_filename'] = 'spesen-legs-base.xlsx'
+    default_mock_config['airplus_legs_filename'] = 'airplus-legs-base.xlsx'
+    default_mock_config['bta_legs_filename'] = 'bta-legs-base.xlsx'
+    default_mock_config['atmosfair_filename'] = 'atmosfair-base.csv'
+
+    return default_mock_config
 
 generate_mock_data()

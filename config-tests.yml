@@ -3,25 +3,25 @@ General:
   output_folder: output-tests
   airports_extended: airports-extended.csv
 atmosfair:
-  responses_folder: 'atmosfair_responses'
+  responses_folder: "atmosfair_responses"
 legs:
   spesen:
-    - '[all-spesen-test-data.xlsx]Table1'
+    - "[spesen-legs-base.xlsx]Sheet1"
   airplus:
-    - '[all-airplus-test-data.xlsx]Table1'
+    - "[airplus-legs-base.xlsx]Sheet1"
   bta:
-    - '[all-bta-test-data]Table1'
+    - "[bta-legs-base.xlsx]Sheet1"
 HR:
   excerpts:
     2017:
-      - '[2017-hr-test-data.xlsx]Sheet1'
+      - "[hr-before-2019-base.xlsx]Sheet1"
     2018:
-      - '[2018-hr-test-data.xlsx]Sheet1'
+      - "[hr-before-2019-base.xlsx]Sheet1"
     2019:
-      - '[2019-hr-test-data.xlsx]Sheet1'
+      - "[hr-since-2019-base.xlsx]Sheet1"
     2020:
-      - '[2020-hr-test-data.xlsx]Sheet1'
-    top_departments: [A, G, L, N, P, R, S, T, V, W]
-    matches_folder: hr_bta_matches
-    outputs:
-      proposed_matches_basename: hr_bta_matches
+      - "[hr-since-2019-base.xlsx]Sheet1"
+  top_departments: [A, G, L, N, P, R, S, T, V, W]
+  matches_folder: hr_bta_matches
+  outputs:
+    proposed_matches_basename: hr_bta_matches

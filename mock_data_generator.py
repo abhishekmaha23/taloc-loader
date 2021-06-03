@@ -6,6 +6,7 @@ import string
 import datetime
 import copy
 import math
+import uuid
 
 fake = Faker()
 
@@ -15,6 +16,8 @@ def get_new_personal_number():
         yield current_personal_number
         current_personal_number += 1
 
+personal_number_generator = get_new_personal_number()
+
 possible_management_levels = ['FS I', 'FS II', 'FS IIIa', 'FS IIIb', 'FS IIIc', None]
 possible_cost_centers = ['A', 'A1', 'B', 'C', 'D', 'E1', 'E2', 'F', 'G', 'H', 'J']
 possible_organizations = [('A', 'Architecture'), ('WA', 'Public Sector'), ('TABC', 'Modeling'), ('TABD', 'Finance'), 
@@ -23,26 +26,35 @@ possible_organizations = [('A', 'Architecture'), ('WA', 'Public Sector'), ('TABC
     ('NC', 'Pharma Tech'), ('VAB', 'Support')]
 possible_employee_types = ['Dozierende 1', 'Dozierende 2', 'wiss. Mitarbeitende 1', 'wiss. Mitarbeitende 2', 'ATP 1']
 
+hr_before_2019_columns = ('Personalnummer bis 2018', 'Anstellungs-Nr',	'PersNr',	'Kurzzeich.',	'Nachname',	'Vorname',	'Geb. Jahr', 'Anrede',	'Kaderstufe',	'Kostenst.',	'Kostenstelle',	'OEKürzel',	'Organisationseinheit',	'Mitarbeiterkreis', 'Vertrags-BG',	'Lohn-BG',	'Eintritt',	'Austritt')
+hr_since_2019_columns = ('PersNr',	'Kurzzeich.',	'Nachname',	'Vorname',	'Geb. Jahr', 'Anrede',	'Kaderstufe',	'Kostenst.',	'Kostenstelle',	'OEKürzel',	'Organisationseinheit',	'Mitarbeiterkreis', 'Vertrags-BG',	'Lohn-BG',	'Eintritt',	'Austritt')
 
 class Person:
     def __init__(self, faker_instance) -> None:
-        self.personal_number_before_2018 = ''
+        self.personal_number_before_2019 = ''
         self.personal_number = ''
-        self.first_name = faker_instance.first_name()
-        self.last_name = faker_instance.last_name()
-        self.name = self.first_name + self.last_name
+        self.gender = random.choice(['Herr', 'Frau'])
+        if self.gender == 'Herr':
+            self.first_name = faker_instance.first_name_male()
+            self.last_name = faker_instance.last_name_male()
+        else:
+            self.first_name = faker_instance.first_name_female()
+            self.last_name = faker_instance.last_name_female()
+        
+        self.name = self.first_name + ' ' + self.last_name
         self.date_of_birth = faker_instance.date_of_birth(minimum_age=20, maximum_age=80)
         self.birth_year = self.date_of_birth.year
-        self.gender = random.choice(['Herr', 'Frau'])
+        
     
 
 class Employee(Person):
     def __init__(self, faker_instance) -> None:
         super().__init__(faker_instance)
-        self.personal_number_before_2018 = str(get_new_personal_number())
+        self.personal_number_before_2019 = str(next(personal_number_generator))
         self.employment_number = str(random.randint(1, 9))
-        self.personal_number = self.personal_number_before_2018 + '0' + self.employment_number
-        self.abbreviation = (self.last_name[:3] + self.first_name[0]).lower()
+        self.personal_number = self.personal_number_before_2019 + '0' + self.employment_number
+        # self.abbreviation = (self.last_name[:3] + self.first_name[0]).lower()
+        self.abbreviation = str(uuid.uuid4())[:8] # Not optimal, but chances of collision are negligible in scales of 10k.
         self.management_level = random.choice(possible_management_levels)
         self.cost_tax = '1234' + str(random.randint(1000, 9999))
         self.cost_center = 'Kost ' + random.choice(possible_cost_centers)
@@ -53,33 +65,36 @@ class Employee(Person):
         else:
             self.vertrags_bg = random.choice(['40.00', '60.00'])
         self.lohn_bg = self.vertrags_bg
-        self.entry_date = faker_instance.date_between(end_date='-4y')
+        self.entry_date = faker_instance.date_between(end_date='-4y').strftime("%d-%m-%Y")
         self.end_date = '31-12-9999'
+        self._make_dataframes()
 
 
-    def to_dataframe(self, target = None):
-        # hr -till 2018 columns
+    def _make_dataframes(self):
+        # hr -before 2019 columns
         # Personalnummer bis 2018, Anstellungs-Nr,	PersNr,	Kurzzeich.,	Nachname,	Vorname,	Geb. Jahr,	
         # Anrede,	Kaderstufe,	Kostenst.,	Kostenstelle,	OEKürzel,	Organisationseinheit,	Mitarbeiterkreis,	
         # Vertrags-BG,	Lohn-BG,	Eintritt,	Austritt
-        # hr -after 2018 columns
+        # hr -since 2019 columns
         # PersNr,	Kurzzeich.,	Nachname,	Vorname,	Geb. Jahr,	Anrede,	Kaderstufe,	Kostenst.,	Kostenstelle,	
         # OEKürzel,	Organisationseinheit,	Mitarbeiterkreis,	Vertrags-BG,	Lohn-BG,	Eintritt,	Austritt
         # will write files into both, by default
-        hr_till_2018 = pd.DataFrame([self.personal_number_before_2018, self.employment_number, self.personal_number, 
+        self.hr_before_2019 = pd.DataFrame([self.personal_number_before_2019, self.employment_number, self.personal_number, 
             self.abbreviation, self.last_name, self.first_name, self.birth_year, self.gender, self.management_level, 
             self.cost_tax, self.cost_center, self.organization_abbreviation, self.organization, self.employee_type, 
-            self.vertrags_bg, self.lohn_bg, self.entry_date, self.end_date])
-        hr_after_2018 = pd.DataFrame([self.personal_number, self.abbreviation, self.last_name, self.first_name, 
+            self.vertrags_bg, self.lohn_bg, self.entry_date, self.end_date]).T
+        self.hr_before_2019.columns = hr_before_2019_columns    
+        self.hr_since_2019 = pd.DataFrame([self.personal_number, self.abbreviation, self.last_name, self.first_name, 
             self.birth_year, self.gender, self.management_level, self.cost_tax, self.cost_center, self.organization_abbreviation, 
-            self.organization, self.employee_type, self.vertrags_bg, self.lohn_bg, self.entry_date, self.end_date])
-
-        if target is None:
-            return hr_till_2018, hr_after_2018
-        elif target == 'before-2018':
-            return hr_till_2018
-        elif target == 'after-2018':
-            return hr_after_2018
+            self.organization, self.employee_type, self.vertrags_bg, self.lohn_bg, self.entry_date, self.end_date]).T
+        self.hr_since_2019.columns = hr_since_2019_columns
+    
+    
+    def get_dataframe(self, target):        
+        if target == 'before-2019':
+            return self.hr_before_2019
+        elif target == 'since-2019':
+            return self.hr_since_2019
 
 
 
@@ -117,10 +132,18 @@ possible_flight_reasons = ['Conference', 'Unknown', 'Project Meeting', 'Strategi
 possible_proveniences = ['AirplusCC', 'CWTravel']
 
 
-def get_random_flight_number():
-    letters = ''.join(random.choice(string.ascii_uppercase) for _ in range(2))
-    numbers = str(random.randint(1000, 9999))
-    return letters + numbers
+def get_random_flight_number(type=None):
+    airline_designator = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(2))
+    flight_designator = str(random.randint(1, 9999))
+    if type == 'bta':
+        optional_character_1 = random.choice(string.ascii_uppercase)
+        optional_character_2 = random.choice(string.ascii_uppercase)
+        flight_number = airline_designator + optional_character_1 + flight_designator + optional_character_2
+        return (airline_designator, flight_designator, optional_character_1, optional_character_2, flight_number)
+    else:
+        optional_character_1 = random.choice(['', random.choice(string.ascii_uppercase)])
+        optional_character_2 = random.choice(['', random.choice(string.ascii_uppercase)])
+        return airline_designator + optional_character_1 + flight_designator + optional_character_2
 
 
 class Flight:
@@ -131,7 +154,17 @@ class Flight:
         self.return_flight_numbers = []
         # There's 3 nodes, 2 segments
         for _ in range(self.number_of_segments + 1):
-            self.airport_data.append(airport_database.sample())        
+            self.airport_data.append(airport_database.sample())
+        self.to_segment_endpoints = []
+        self.return_segment_endpoints = []
+
+        for i in range(self.number_of_segments):
+            self.to_segment_endpoints.append((self.airport_data[i].iata.iloc[0], self.airport_data[i+1].iata.iloc[0]))
+            self.return_segment_endpoints.insert(0, (self.airport_data[i+1].iata.iloc[0], self.airport_data[i].iata.iloc[0]))
+        
+        self.all_segment_endpoint_tuples = self.to_segment_endpoints + self.return_segment_endpoints
+       
+        # For simplifying, assuming that return flights start 10 days after initial flights
         self.to_flight_dates = []
         self.return_flight_dates = []
         initial_to_flight_date = faker_instance.date_between(start_date='-4y', end_date='-1y')
@@ -142,8 +175,15 @@ class Flight:
         for _ in range(self.number_of_segments - 1):
             self.to_flight_dates.append(self.to_flight_dates[-1] + datetime.timedelta(days=random.randint(1, 3)))
             self.return_flight_dates.append(self.return_flight_dates[-1] + datetime.timedelta(days=random.randint(1, 3)))
-        self.pax = random.choices([1, 2], weights=[0.95, 0.05])[0]
+        
+        self.all_flight_dates = self.to_flight_dates + self.return_flight_dates
+        
+        self.pax = random.choices([1, 2, 3, 4, 5, 6, 7], weights=[0.90, 0.04, 0.01, 0.01, 0.01, 0.01, 0.01])[0]
 
+
+flights_spesen_airplus_columns = ['departure',	'arrival', 'pax',	'travelClass', 'flightNumber', 'flightDate', 'aircraft', 
+    'charter', 'flightReason', 'flightReasonOther', 'employeeName', 'employeeID18',	'employeeID19', 'FlightAmount', 'recordYear',	
+    'recordMonth', 'flightDateUnknown', 'recordComments', 'provenience']
 
 class Flight_Spesen_Airplus_Data(Flight):
     def __init__(self, faker_instance, passenger, data_type=None) -> None:
@@ -152,7 +192,7 @@ class Flight_Spesen_Airplus_Data(Flight):
             self.data_type = random.choice(['spesen', 'airplus'])
         else:
             self.data_type = data_type
-        self.travel_class = random.choice(['Y', 'B'])
+        self.travel_class = random.choice(['Y', 'B', 'F'])
         self.aircraft = ''
         self.charter = ''
         self.flight_reason_other = ''
@@ -162,30 +202,46 @@ class Flight_Spesen_Airplus_Data(Flight):
             self.provenience = 'Archive'
             for _ in range(self.number_of_segments):
                 # Get reasonable dates, and flight numbers
-                # For simplifying, assuming that return flights start 10 days after initial flights
                 self.to_flight_numbers.append(get_random_flight_number())
                 self.return_flight_numbers.append(get_random_flight_number())
+            self.all_flight_numbers = self.to_flight_numbers + self.return_flight_numbers
         elif self.data_type == 'airplus':
             self.flight_reason = ''
             self.provenience = random.choice(possible_proveniences)
-        
+            self.all_flight_numbers  = ['' for i in range(2 * self.number_of_segments)]
         # Must associate one flying person to this flight. Will randomly sample from all 
         # flying people (guests, unregistered employees or otherwise).
         self.associated_passenger = passenger
         self.employee_name = self.associated_passenger.name
-        self.employee_id_18 = self.associated_passenger.personal_number_before_2018
+        self.employee_id_18 = self.associated_passenger.personal_number_before_2019
         self.employee_id_19 = self.associated_passenger.personal_number
 
 
         # Recording a random number of months before or after the date of starting the whole flight 
-        record_date = self.to_flight_dates[0] + datetime.timedelta(months=random.randint(-4,4))        
+        record_date = self.to_flight_dates[0] + datetime.timedelta(weeks=random.randint(-16,16))
         self.record_year = record_date.year
         self.record_month = record_date.month
         self.flight_date_unknown = 'FALSE'
         self.record_comments = ''
-    
-    def to_dataframe(self):
-        pass
+
+        self._make_dataframe()
+
+    def _make_dataframe(self):
+        # columns departure	arrival	pax	travelClass	flightNumber	flightDate	aircraft	charter	flightReason	flightReasonOther	employeeName	employeeID18	employeeID19	FlightAmount	recordYear	recordMonth	flightDateUnknown	recordComments	provenience
+        indices = list(range(len(self.to_flight_numbers) + len(self.return_flight_numbers)))
+        self.flight_df = pd.DataFrame(columns=flights_spesen_airplus_columns, index=indices)
+        current_row = 0
+        for i in range(len(self.all_segment_endpoint_tuples)):
+            row_df = [self.all_segment_endpoint_tuples[i][0], self.all_segment_endpoint_tuples[i][1], self.pax, self.travel_class, 
+                self.all_flight_numbers[i], self.all_flight_dates[i].strftime("%d-%m-%Y"), self.aircraft, self.charter, self.flight_reason, 
+                self.flight_reason_other, self.employee_name, self.employee_id_18, self.employee_id_19, self.flight_amount,
+                self.record_year, self.record_month, self.flight_date_unknown, self.record_comments, self.provenience]
+            self.flight_df.loc[current_row] = row_df
+            current_row += 1
+
+
+    def get_dataframe(self):
+        return self.flight_df
 
 
 def get_new_dossier_number():
@@ -194,6 +250,7 @@ def get_new_dossier_number():
         yield current_dossier_number
         current_dossier_number += 1
 
+dossier_number_generator = get_new_dossier_number()
 
 def randomly_modify_passenger_name(first_name, last_name):
     modification_choice = random.choice([None, 'Reverse', 'Reverse+Slice', 'Slice'])
@@ -204,14 +261,19 @@ def randomly_modify_passenger_name(first_name, last_name):
     elif modification_choice == 'Reverse+Slice':
         return last_name + ' ' + first_name[: random.randint(0, len(first_name))]
     elif modification_choice == 'Slice':
-        return first_name[: random.randint(1, len(first_name))] + last_name
+        return first_name[: random.randint(1, len(first_name))] + ' ' + last_name
 
+flights_bta_columns = ['Profit Center', 'Dossier No', 'Invoice Receiver', 'Name', 'Department', 'Pax', 
+    'PID sales amount', 'Ticket N°', 'Ticket N°2', 'From Destination', 'To Destination','Class', 'Metric Tons',
+    'Price', 'Airline Miles', 'Airline Km', 'Departure Date', 'Ext. Reference N°', 'TKTTKT', 'check', 'Routing 1', 
+    'Routing 2', 'Routing 3', 'Routing 4', 'Routing 5', 'Routing 6', 'Routing 7', 'Routing 8', 'Routing 9', 'Routing 10',
+    'Routing 11', 'Routing 12']
 
 class Flight_BTA_Data(Flight):
     def __init__(self, faker_instance, passenger) -> None:
         super().__init__(faker_instance)
         self.profit_center = '9999'
-        self.dossier_number = str(get_new_dossier_number())
+        self.dossier_number = str(next(dossier_number_generator))
         self.invoice_number = str(random.randint(1000000, 9999999))
         self.name = 'A Uni'
         self.department = random.choice(possible_organizations)[1]
@@ -220,30 +282,82 @@ class Flight_BTA_Data(Flight):
         self.associated_passenger = passenger
         self.passenger_name = randomly_modify_passenger_name(self.associated_passenger.first_name, self.associated_passenger.last_name)
 
-        self.pid_sales_amount = str(round(random.uniform(50, 5000), 2))
-        self.ticket_no = str(random.random(10000, 99999))
-        self.ticket_no_2 = str(random.random(10000, 99999))
+        self.pid_sales_amount = str(round(random.uniform(50, 5000), 2)) # only for first expense, 0 for rest.
+        self.pid_sales_amount_list = [self.pid_sales_amount] + ['0.00' for _ in range(len(self.all_segment_endpoint_tuples) - 1)]
+        
+        self.ticket_no = str(random.randint(10000, 99999))
+        self.ticket_no_2 = str(random.randint(10000, 99999))
 
         self.travel_class = random.choice(['Y', 'B', 'C'])
-        self.metric_tons = str(random.uniform(0, 2))
-        self.price = str(random.randint(1, 100)) + '.00'
-        self.ext_reference_no =  str(random.random(10000, 99999))
-        self.tkttkt =  str(random.random(10000, 99999))
+        self.metric_tons_list =  [] # str(random.uniform(0, 2))
+        for _ in self.to_segment_endpoints:
+            self.metric_tons_list.append(str(random.uniform(0, 2)))
+        self.metric_tons_list = self.metric_tons_list + list(reversed(self.metric_tons_list))
+        
+        self.price_list = [] # str(random.randint(1, 100)) + '.00'
+        for _ in self.to_segment_endpoints:
+            self.price_list.append(str(random.randint(1, 100)) + '.00')
+        self.price_list = self.price_list + list(reversed(self.price_list))
+
+        self.miles_list = []
+        for _ in self.to_segment_endpoints:
+            self.miles_list.append(random.uniform(100, 6000))        
+        self.miles_list = self.miles_list + list(reversed(self.miles_list))
+        self.kilometers_list = [x* 1.6 for x in self.miles_list]
+        
+        self.miles_list = [str(round(x, 2)) for x in self.miles_list]
+        self.kilometers_list = [str(round(x, 2)) for x in self.kilometers_list]
+
         self.departure_date = self.to_flight_dates[0]
+        self.ext_reference_no =  str(random.randint(10000, 99999))
+        self.tkttkt =  str(random.randint(10000, 99999))
         self.check = 'OK'
         
-        # routing values are weirdly formatted, and logic should be placed in the writing methods
-        # Miles and kilometers are flight segment values as well, and need to modified accordingly.
-        # self.miles = 'NA'
-        # self.kilometers = 'NA'
+        self.all_flight_numbers = []
+        # routing values are weirdly formatted as follows
+        self.routing_columns = ['' for i in range(12)]
+        for i in range(len(self.all_segment_endpoint_tuples)):
+            flight_details_tuple = get_random_flight_number(type='bta')
+            routing_string = self.all_segment_endpoint_tuples[i][0] + ' |' + self.all_segment_endpoint_tuples[i][1] \
+                    + ' |' + flight_details_tuple[0] + ' | ' + flight_details_tuple[1] + '|' + flight_details_tuple[2] + '|'  \
+                    + flight_details_tuple[3] + '|' + self.all_flight_dates[i].strftime('%d.%m.%Y')
+            self.routing_columns[i] = routing_string
+            self.all_flight_numbers.append(flight_details_tuple[4])
+        
+        self._make_dataframe()
+
+    def _make_dataframe(self):
+        # Profit Center	Dossier No	Invoice Receiver	Name	Department	Pax	PID sales amount	Ticket N°	Ticket N°2	From Destination	To Destination	Class	Metric Tons	Price	Airline Miles	Airline Km	Departure Date	Ext. Reference N°	TKTTKT	check	Routing 1	Routing 2	Routing 3	Routing 4	Routing 5	Routing 6	Routing 7	Routing 8	Routing 9	Routing 10	Routing 11	Routing 12
+        indices = list(range(len(self.to_flight_numbers) + len(self.return_flight_numbers)))
+        self.flight_df = pd.DataFrame(columns=flights_bta_columns, index=indices)
+        current_row = 0
+        for i in range(len(self.all_segment_endpoint_tuples)):
+            row_df = [self.profit_center, self.dossier_number, self.invoice_number, self.name, self.department, self.passenger_name, 
+                self.pid_sales_amount_list[i], self.ticket_no, self.ticket_no_2, self.all_segment_endpoint_tuples[i][0], 
+                self.all_segment_endpoint_tuples[i][1], self.travel_class, self.metric_tons_list[i], self.price_list[i], 
+                self.miles_list[i], self.kilometers_list[i], self.departure_date, self.ext_reference_no,self.tkttkt, self.check, 
+                self.routing_columns[0], self.routing_columns[1], self.routing_columns[2], self.routing_columns[3], self.routing_columns[4], 
+                self.routing_columns[5], self.routing_columns[6], self.routing_columns[7], self.routing_columns[8], self.routing_columns[9],
+                self.routing_columns[10], self.routing_columns[11]
+                ]
+            # print(len(row_df))
+            # print(len(flights_bta_columns))
+            self.flight_df.loc[current_row] = row_df
+            current_row += 1
     
-    def to_dataframe(self):
-        pass
+    def get_dataframe(self):
+        return self.flight_df
+
 
 
 possible_aircraft_types = ['Boeing 767-400 Passenger', 'Airbus A330-300', 'Fokker 100']
 
-class AtmosfairData:
+atmosfair_data_columns = ['departure', 'arrival', 'pax', 'travelClass', 'flightNumber', 'flightDate','aircraft', 'charter', 
+    'UniqueID atmosfair', 'Unnamed: 11', 'flight', 'specific fuel consumption', 'share of fuel use in cruise', 'fuel use', 	
+    'fuel use in critical altitudes', 'CO2', 'CO2RFI2', 'CO2RFI2.7', 'CO2RFI4', 'CO2DEFRA', 'CO2GHGGRI', 'CO2ICAO', 'CO2VFU',
+    'aircraft.1', 'distance','cruise altitude', 'method']
+
+class AtmosfairFlightData:
     def __init__(self, flight, faker_instance) -> None:
         self.associated_flight = flight
         # Departure, arrival, flight numbers, flight dates, travel class are from the flight object.
@@ -253,26 +367,60 @@ class AtmosfairData:
         self.uniqueID = ''
         self.unnamed = ''
         self.flight_column = 'ok'
+        num_segments = len(self.associated_flight.to_segment_endpoints)
+        self.specific_fuel_consumption_list = [str(random.uniform(1, 10)) for _ in range(2*num_segments)]
+        self.share_of_fuel_use_in_cruise_list = [str(round(random.uniform(85, 100), 2)) + '%' for _ in range(2*num_segments)]
+        self.fuel_use_list = [random.uniform(0, 0.5) for _ in range(2*num_segments)]
+        self.fuel_use_in_critical_alt_list = [random.uniform(0.85, 1) * self.fuel_use_list[i] for i in range(2*num_segments)]
+        self.CO2_list = [random.uniform(0, 1) for _ in range(2*num_segments)]
+        self.CO2RFI2_list = [random.uniform(1, 1.5) * self.CO2_list[i] for i in range(2*num_segments)]
+        self.CO2RFI27_list = [random.uniform(1, 1.5) * self.CO2RFI2_list[i] for i in range(2*num_segments)]
+        self.CO2RFI4_list = [random.uniform(1, 1.5) * self.CO2RFI27_list[i] for i in range(2*num_segments)]
+        self.CO2DEFRA_list = [random.uniform(0, 2) for _ in range(2*num_segments)]
+        self.CO2GHGGRI_list = [random.uniform(0, 1) for _ in range(2*num_segments)]
+        self.CO2ICAO_list = [random.uniform(0, 1) for _ in range(2*num_segments)]
+        self.CO2VFU_list = [random.uniform(0, 1) for _ in range(2*num_segments)]
+        self.aircraft1_list = self._duplicate_with_reversal([random.choice(possible_aircraft_types) for _ in range(num_segments)])
+        self.distance_list = self._duplicate_with_reversal([random.uniform(100, 6000) for _ in range(num_segments)])        
+        self.cruise_atitude_list = self._duplicate_with_reversal([random.randint(100, 300) * 100 for _ in range(num_segments)])
+        self.method_list = [random.choice(['V2_2.16', 'V2_1_5']) for _ in range(2*num_segments)]
 
-        self.specific_fuel_consumption = str(random.uniform(1, 10))
-        self.share_of_fuel_use_in_cruise = str(round(random.uniform(85, 100), 2)) + '%'
-        self.fuel_use = random.uniform(0, 0.5)
-        self.fuel_use_in_critical_alt = random.uniform(0.85, 1) * self.fuel_use
-        self.CO2 = random.uniform(0, 1)
-        self.CO2RFI2 = random.uniform(1, 1.5) * self.CO2
-        self.CO2RFI27 = random.uniform(1, 1.5) * self.CO2RFI2
-        self.CO2RFI4 = random.uniform(1, 1.5) * self.CO2RFI27
-        self.CO2DEFRA = random.uniform(0, 2)
-        self.CO2GHGGRI = random.uniform(0, 1)
-        self.CO2ICAO = random.uniform(0, 1)
-        self.CO2VFU = random.uniform(0, 1)
-        self.aircraft1 = random.choice(possible_aircraft_types)
-        # self.distance = 
-        self.cruise_atitude = random.randint(100-300) * 100
-        self.method = random.choice(['V2_2.16', 'V2_1_5'])
-    
-    def to_dataframe(self):
-        pass
+        self._make_dataframe()
+
+    def _duplicate_with_reversal(self, input_list):
+        input_list = input_list + list(reversed(input_list))
+        return input_list
+
+    def _make_dataframe(self):
+        # atmosfair_data_columns = ['departure', 'arrival', 'pax', 'travelClass', 'flightNumber', 'flightDate','aircraft', 'charter', 
+        # 'UniqueID atmosfair', 'Unnamed: 11', 'flight', 'specific fuel consumption', 'share of fuel use in cruise', 'fuel use', 	
+        # 'fuel use in critical altitudes', 'CO2', 'CO2RFI2', 'CO2RFI2.7', 'CO2RFI4', 'CO2DEFRA', 'CO2GHGGRI', 'CO2ICAO', 'CO2VFU',
+        # 'aircraft.1', 'distance','cruise altitude', 'method']
+        indices = list(range(len(self.associated_flight.to_flight_numbers) + len(self.associated_flight.return_flight_numbers)))
+        current_row = 0
+        self.atmosfair_df = pd.DataFrame(columns=atmosfair_data_columns, index=indices)
+        for i in range(len(self.associated_flight.all_segment_endpoint_tuples)):
+            row_df = [self.associated_flight.all_segment_endpoint_tuples[i][0], self.associated_flight.all_segment_endpoint_tuples[i][1], self.pax, 
+                self.associated_flight.travel_class, self.associated_flight.all_flight_numbers[i], 
+                self.associated_flight.all_flight_dates[i].strftime("%d.%m.%Y"), self.aircraft, self.charter, self.uniqueID, self.unnamed, 
+                self.flight_column, self.specific_fuel_consumption_list[i], self.share_of_fuel_use_in_cruise_list[i], self.fuel_use_list[i], 
+                self.fuel_use_in_critical_alt_list[i], self.CO2_list[i], self.CO2RFI2_list[i], self.CO2RFI27_list[i], self.CO2RFI4_list[i],
+                self.CO2DEFRA_list[i], self.CO2GHGGRI_list[i], self.CO2ICAO_list[i], self.CO2VFU_list[i], self.aircraft1_list[i], 
+                self.distance_list[i], self.cruise_atitude_list[i], self.method_list[i]]
+            self.atmosfair_df.loc[current_row] = row_df
+            current_row += 1
+
+    def get_dataframe(self):
+        return self.atmosfair_df
+
+# To write to the test files, we must do the following steps
+# 1. Make copies of the base test files, place them in the outer folder
+# 2. Append data to the files from the pandas dataframes that have been made here.
+
+# There's 4 HR files to write, 2017, 2018, 2019, 2020, all with the same format
+# There's 3 Flight files to write, Spesen, Airplus (same columns) and BTA (different columns)
+# There's 1 Atmosfair CSV to write, entirely anew.
+# Initial run should generate data into the hr_bta_matches file, which can then be updated manually and run afterwards nicely.  
 
 def generate_mock_data():
 
@@ -297,34 +445,76 @@ def generate_mock_data():
         list_flying_guests.append(Person(fake))
     for i in range(num_flying_employees_not_in_hr):
         list_flying_employees_not_in_hr.append(Person(fake))
-    list_all_flying_people = list_flying_employees + list_flying_employees_not_in_hr + list_flying_employees_not_in_hr
-
+    list_all_flying_people = list_flying_employees + list_flying_guests + list_flying_employees_not_in_hr
+    print('Created', len(list_all_flying_people) + len(list_non_flying_employees), 'people!')
+    print(len(list_all_flying_people), 'people have taken flights in the past period.')
 
     # Every flying person needs to go to a flight booking.
     # We do this through shuffling the list and then iterating through it - no duplicates ensue.
     # Number of total flying people = number of total flights (round-trips)
-    actual_passenger_list = random.shuffle(copy.deepcopy(list_all_flying_people))
+    actual_passenger_list = copy.deepcopy(list_all_flying_people)
+    random.shuffle(actual_passenger_list)
     all_flights = []
+    spesen_flights = []
+    airplus_flights = []
+    bta_flights = []
     for passenger in actual_passenger_list:
         flight_type = random.choice(['bta', 'spesen', 'airplus'])
+        # flight_type = random.choice(['spesen', 'airplus'])
+        # flight_type = random.choice(['bta'])
         if flight_type == 'bta':
-            all_flights.append(Flight_BTA_Data(fake, passenger))
+            new_flight = Flight_BTA_Data(fake, passenger)
+            bta_flights.append(new_flight)
+            all_flights.append(new_flight)
         elif flight_type == 'spesen':
-            all_flights.append(Flight_Spesen_Airplus_Data(fake, passenger, 'spesen'))
+            new_flight = Flight_Spesen_Airplus_Data(fake, passenger, 'spesen')
+            spesen_flights.append(new_flight)
+            all_flights.append(new_flight)
         elif flight_type == 'airplus':
-            all_flights.append(Flight_Spesen_Airplus_Data(fake, passenger, 'airplus'))
+            new_flight = Flight_Spesen_Airplus_Data(fake, passenger, 'airplus')
+            airplus_flights.append(new_flight)
+            all_flights.append(new_flight)
+
+    print('----------')
+    print('Created', len(all_flights), 'round trips!')
+    print('with', sum([2* x.number_of_segments for x in spesen_flights]), 'segments in the spesen records. (' + str(len(spesen_flights))+ ') trips.')
+    print('with', sum([2* x.number_of_segments for x in airplus_flights]), 'segments in the airplus records. ('+ str(len(airplus_flights))+') trips.')
+    print('with', sum([2* x.number_of_segments for x in bta_flights]), 'segments in the bta records. ('+str(len(bta_flights))+ ') trips.')
 
     # Control the proportion of flights that will have data in atmosfair reponse previously, and populate the CSV as needed.
     proportion_of_precached_atmosfair_data = 0.7
     num_flights_with_atmosfair_data = math.floor(len(all_flights) * proportion_of_precached_atmosfair_data)
-    flights_with_atmosfair_data = random.shuffle(all_flights)[:num_flights_with_atmosfair_data]
+    random.shuffle(all_flights)
+    flights_with_atmosfair_data = all_flights[:num_flights_with_atmosfair_data]
     existing_atmosfair_data = []
 
     # Initialize Atmosfair data for all these flights
-
     for flight in flights_with_atmosfair_data:
-        existing_atmosfair_data.append(AtmosfairData(flight, fake))
-
+        existing_atmosfair_data.append(AtmosfairFlightData(flight, fake))
+    print('----------')
+    print('Created atmosfair data for ', len(existing_atmosfair_data), ' trips.')
+    print('----------')
 
     # Begin writing all data to files.
-    # for person in 
+    hr_dataframe_before_2019 = pd.concat(person.get_dataframe('before-2019') for person in list_flying_employees).reset_index(drop=True)
+    hr_dataframe_since_2019 = pd.concat(person.get_dataframe('since-2019') for person in list_flying_employees).reset_index(drop=True)
+    # print(hr_dataframe_before_2019)
+    # print(hr_dataframe_since_2019)
+    if len(spesen_flights) > 0:
+        spesen_flight_dataframe = pd.concat(flight.get_dataframe() for flight in spesen_flights).reset_index(drop=True)
+    if len(airplus_flights) > 0:
+        airplus_flight_dataframe = pd.concat(flight.get_dataframe() for flight in airplus_flights).reset_index(drop=True)
+    if len(bta_flights)>0:
+        bta_flight_dataframe = pd.concat(flight.get_dataframe() for flight in bta_flights).reset_index(drop=True)
+    # print(spesen_flight_dataframe)
+    # print(airplus_flight_dataframe)
+    # print(bta_flight_dataframe)
+    # bta_flight_dataframe.to_csv('bta-test.csv', index=False)
+
+    if len(existing_atmosfair_data) > 0:
+        atmosfair_flight_dataframe = pd.concat(atmosfair_data.get_dataframe() for atmosfair_data in existing_atmosfair_data).reset_index(drop=True)
+    # print(atmosfair_flight_dataframe)
+
+    # atmosfair_flight_dataframe.to_csv('atmos.csv', index=False)
+
+generate_mock_data()
